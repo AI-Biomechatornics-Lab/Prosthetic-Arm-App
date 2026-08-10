@@ -1,0 +1,46 @@
+name: prosthetic_arm_app
+description: "Prosthetic Arm control web app - EMG gesture recognition dashboard."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.4
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+
+  # State management
+  flutter_riverpod: ^2.6.1
+
+  # Navigation
+  go_router: ^14.6.2
+
+  # Networking
+  dio: ^5.7.0
+  web_socket_channel: ^3.0.1
+
+  # Fonts
+  google_fonts: ^6.2.1
+
+  # Charts (live EMG waveform)
+  fl_chart: ^0.69.2
+
+  # Local persistence (auto-login)
+  shared_preferences: ^2.3.3
+
+  # Formatting
+  intl: ^0.20.1
+
+  # Opening the exported PDF (backend generates it; web opens it in a new tab)
+  url_launcher: ^6.3.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true

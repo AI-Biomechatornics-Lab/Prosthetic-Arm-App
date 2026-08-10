@@ -1,0 +1,4 @@
+https://172.29.68.89:3443 {
+	tls internal
+	reverse_proxy localhost:3000
+}

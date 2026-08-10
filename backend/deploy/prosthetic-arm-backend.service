@@ -1,0 +1,16 @@
+[Unit]
+Description=Prosthetic Arm API server
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=biomekatronik
+WorkingDirectory=/home/biomekatronik/Projects/ProstheticArmApp/backend
+EnvironmentFile=/home/biomekatronik/Projects/ProstheticArmApp/backend/.env
+ExecStart=/usr/bin/node server.js
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
