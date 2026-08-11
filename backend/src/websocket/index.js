@@ -5,6 +5,10 @@ const attachLatencyLogger = require('./latencyLogger');
 
 const CHANNELS = {
   '/myo/stream': 'emg_data',
+  // Throttled, pre-averaged ~20Hz feed for the dashboard chart, so it isn't
+  // parsing the full ~200Hz raw stream just to average it back down anyway.
+  // Calibration still reads raw /myo/stream, which needs full rate.
+  '/myo/stream/preview': 'emg_data_preview',
   '/prediction/stream': 'prediction',
   '/servo/stream': 'servo_event',
 };

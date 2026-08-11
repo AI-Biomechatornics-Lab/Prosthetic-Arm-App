@@ -30,6 +30,17 @@ import quick_calibration as qc  # noqa: E402  (side effects are intentional: loa
 CALIB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "calibrations")
 os.makedirs(CALIB_DIR, exist_ok=True)
 
+# Raw EMG arrives at ~200Hz (2 samples per BLE packet) and every sample is
+# broadcast as its own "emg_data" event on /myo/stream - calibration needs
+# that full rate to build the 150-sample/0.75s windows the model expects.
+# The dashboard's live chart doesn't need (or want) 200 JSON messages a
+# second though, so it gets its own throttled, pre-averaged feed here
+# instead of downsampling on the frontend after already paying the parse
+# cost for every raw message.
+_PREVIEW_INTERVAL_SECONDS = 0.05
+_preview_sums = [0.0] * 8
+_preview_count = 0
+
 
 def emit(event_type, payload=None):
     print(json.dumps({"type": event_type, "payload": payload if payload is not None else {}}), flush=True)
@@ -43,10 +54,14 @@ def log(message):
 #    it republishes every EMG sample as a bridge event for the live graph. ──
 class BridgeClient(qc.myo.MyoClient):
     async def on_emg_data(self, emg):
+        global _preview_count
         for sample in [emg.sample1, emg.sample2]:
             values = list(sample)
             qc.STATE.emg_buffer.append(values)
             emit("emg_data", {"channels": values})
+            for i, v in enumerate(values):
+                _preview_sums[i] += v
+            _preview_count += 1
 
     async def on_imu_data(self, _):
         pass
@@ -77,8 +92,26 @@ class Bridge:
 
     # ── Myo lifecycle ──
 
+    async def _verify_connected(self):
+        """
+        A held `self.client` reference doesn't mean the BLE link is still up -
+        the Myo drops its connection on its own (inactivity sleep, range,
+        etc.) without telling us. Ping it with a cheap read; if that fails,
+        clear the stale reference so the next connect actually reconnects
+        instead of confirming a dead session.
+        """
+        if self.client is None:
+            return False
+        try:
+            await self.client.battery_level()
+            return True
+        except Exception as exc:  # noqa: BLE001
+            log(f"Stale Myo connection detected, clearing: {exc}")
+            self.client = None
+            return False
+
     async def myo_connect(self, payload):
-        if self.client is not None:
+        if await self._verify_connected():
             emit("myo_connect_result", {"success": True, "already_connected": True})
             return
         log("Scanning for Myo armband...")
@@ -95,26 +128,38 @@ class Bridge:
     async def myo_disconnect(self, payload):
         await self._stop_control()
         if self.client is not None:
-            await self.client.stop()
-            await self.client.disconnect()
-            self.client = None
+            try:
+                await self.client.stop()
+                await self.client.disconnect()
+            except Exception as exc:  # noqa: BLE001
+                log(f"Error during disconnect (clearing state anyway): {exc}")
+            finally:
+                self.client = None
         emit("myo_disconnect_result", {"success": True})
 
     async def myo_battery(self, payload):
         if self.client is None:
             emit("myo_battery_result", {"battery": None, "error": "not connected"})
             return
-        battery = await self.client.battery_level()
-        emit("myo_battery_result", {"battery": battery})
+        try:
+            battery = await self.client.battery_level()
+            emit("myo_battery_result", {"battery": battery})
+        except Exception as exc:  # noqa: BLE001
+            self.client = None
+            emit("myo_battery_result", {"battery": None, "error": str(exc)})
 
     async def myo_poweroff(self, payload):
         if self.client is None:
             emit("myo_poweroff_result", {"success": False, "error": "not connected"})
             return
         await self._stop_control()
-        await self.client.deep_sleep()
-        await self.client.disconnect()
-        self.client = None
+        try:
+            await self.client.deep_sleep()
+            await self.client.disconnect()
+        except Exception as exc:  # noqa: BLE001
+            log(f"Error during poweroff (clearing state anyway): {exc}")
+        finally:
+            self.client = None
         emit("myo_poweroff_result", {"success": True})
 
     # ── Calibration: fine-tune on samples the frontend already collected
@@ -208,7 +253,7 @@ class Bridge:
     #    but emits structured prediction/servo events instead of printing. ──
 
     async def start_control(self, payload):
-        if self.client is None:
+        if not await self._verify_connected():
             emit("start_control_result", {"success": False, "error": "Myo not connected"})
             return
         if self.control_running:
@@ -325,9 +370,23 @@ async def read_commands(bridge):
         asyncio.create_task(bridge.handle(msg.get("command"), msg.get("payload", {})))
 
 
+async def emg_preview_loop():
+    global _preview_count
+    while True:
+        await asyncio.sleep(_PREVIEW_INTERVAL_SECONDS)
+        if _preview_count == 0:
+            continue
+        averaged = [s / _preview_count for s in _preview_sums]
+        emit("emg_data_preview", {"channels": averaged})
+        for i in range(len(_preview_sums)):
+            _preview_sums[i] = 0.0
+        _preview_count = 0
+
+
 async def main():
     bridge = Bridge()
     log("Bridge ready")
+    asyncio.create_task(emg_preview_loop())
     await read_commands(bridge)
 
 

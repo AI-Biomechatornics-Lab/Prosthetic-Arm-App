@@ -12,7 +12,10 @@ const logsRoutes = require('./routes/logs.routes');
 const app = express();
 
 app.use(cors({ origin: env.corsOrigins }));
-app.use(express.json());
+// A full calibration session posts ~30k raw EMG samples (10 gestures x 3
+// reps x 5s at ~200Hz) in one request - comfortably a few MB, well past
+// Express's 100kb default.
+app.use(express.json({ limit: '20mb' }));
 app.use(morgan(env.nodeEnv === 'production' ? 'tiny' : 'dev'));
 
 app.get('/health', (req, res) => res.json({ status: 'ok' }));

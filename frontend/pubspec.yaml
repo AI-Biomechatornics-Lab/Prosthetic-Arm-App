@@ -25,9 +25,6 @@ dependencies:
   # Fonts
   google_fonts: ^6.2.1
 
-  # Charts (live EMG waveform)
-  fl_chart: ^0.69.2
-
   # Local persistence (auto-login)
   shared_preferences: ^2.3.3
 

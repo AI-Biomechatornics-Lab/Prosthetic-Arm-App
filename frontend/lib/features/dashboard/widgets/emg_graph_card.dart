@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../shared/widgets/section_card.dart';
 import '../../monitoring/providers/emg_provider.dart';
 import '../../monitoring/widgets/emg_chart.dart';
@@ -10,22 +11,51 @@ class EmgGraphCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // A plain Provider, not a ChangeNotifierProvider: watching it just hands
+    // back the singleton controller and does NOT rebuild this widget every
+    // time it calls notifyListeners() for a new sample. Only the CustomPaint
+    // inside EmgChart listens to that (via CustomPainter's `repaint` hook).
+    final controller = ref.watch(emgSignalControllerProvider);
+
     ref.listen(myoControllerProvider.select((s) => s.status), (previous, next) {
-      final emg = ref.read(emgControllerProvider.notifier);
       if (next == MyoStatus.connected) {
-        emg.start();
+        controller.start();
       } else {
-        emg.stop();
+        controller.stop();
       }
     });
 
-    final emgState = ref.watch(emgControllerProvider);
-
     return SectionCard(
       title: 'Live EMG Signal',
-      child: SizedBox(
-        height: 220,
-        child: EmgChart(channels: emgState.channels),
+      child: Column(
+        children: [
+          Container(
+            height: 220,
+            decoration: BoxDecoration(
+              color: const Color(0xFF0A0A0A),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            padding: const EdgeInsets.all(8),
+            child: EmgChart(controller: controller),
+          ),
+          const SizedBox(height: 8),
+          // Legend
+          Wrap(
+            spacing: 12,
+            runSpacing: 6,
+            children: List.generate(8, (i) {
+              final color = AppColors.emgChannels[i % AppColors.emgChannels.length];
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(width: 12, height: 8, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2))),
+                  const SizedBox(width: 6),
+                  Text('CH${i + 1}', style: const TextStyle(color: AppColors.white, fontSize: 12)),
+                ],
+              );
+            }),
+          ),
+        ],
       ),
     );
   }
