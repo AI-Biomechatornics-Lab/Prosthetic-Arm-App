@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../shared/services/api_client.dart';
@@ -100,9 +101,18 @@ class CalibrationController extends StateNotifier<CalibrationState> {
 
     state = state.copyWith(phase: CalibrationPhase.submitting);
     try {
+      // Fine-tuning 30 epochs on the Pi's CPU is slow - the base Dio client's
+      // 30s receiveTimeout is meant for ordinary API calls and was killing
+      // this request client-side while the backend kept training and saved
+      // the result anyway (visible only after a later refresh). Give this
+      // specific call room to actually finish.
       final res = await ApiClient.instance.dio.post(
         '/calibration/$_userId',
         data: {'samples': _samples},
+        options: Options(
+          sendTimeout: const Duration(minutes: 2),
+          receiveTimeout: const Duration(minutes: 5),
+        ),
       );
       final accuracy = (res.data['calibration']['accuracy'] as num?)?.toDouble();
       state = state.copyWith(phase: CalibrationPhase.done, resultAccuracy: accuracy);

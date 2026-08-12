@@ -24,6 +24,13 @@ CREATE TABLE IF NOT EXISTS logs (
   prediction VARCHAR(50) NOT NULL,
   confidence REAL NOT NULL,
   servo_command VARCHAR(50) NOT NULL,
+  -- Full pipeline breakdown: gesture_start (oldest sample in the window used
+  -- for this prediction - the closest proxy we have to "when the user moved
+  -- their hand"), data_received (newest sample in that window, i.e. just
+  -- before inference ran), prediction_time (inference done), servo_time
+  -- (servo command issued). latency_ms spans gesture_start -> servo_time.
+  gesture_start_time TIMESTAMPTZ NOT NULL,
+  data_received_time TIMESTAMPTZ NOT NULL,
   prediction_time TIMESTAMPTZ NOT NULL,
   servo_time TIMESTAMPTZ NOT NULL,
   latency_ms REAL NOT NULL,

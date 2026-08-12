@@ -8,6 +8,7 @@ const authRoutes = require('./routes/auth.routes');
 const myoRoutes = require('./routes/myo.routes');
 const calibrationRoutes = require('./routes/calibration.routes');
 const logsRoutes = require('./routes/logs.routes');
+const controlRoutes = require('./routes/control.routes');
 
 const app = express();
 
@@ -24,6 +25,7 @@ app.use('/auth', authRoutes);
 app.use('/myo', myoRoutes);
 app.use('/calibration', calibrationRoutes);
 app.use('/logs', logsRoutes);
+app.use('/control', controlRoutes);
 
 app.use(errorHandler);
 

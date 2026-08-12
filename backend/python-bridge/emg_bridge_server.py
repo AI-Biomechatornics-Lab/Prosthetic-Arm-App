@@ -21,6 +21,7 @@ import os
 import sys
 import time
 import uuid
+from collections import deque
 
 import numpy as np
 import torch
@@ -41,6 +42,14 @@ _PREVIEW_INTERVAL_SECONDS = 0.05
 _preview_sums = [0.0] * 8
 _preview_count = 0
 
+# Arrival time of each sample currently in qc.STATE.emg_buffer, kept in
+# lockstep with it (same maxlen, appended together) so that when a
+# prediction fires we know exactly when the oldest sample in that window
+# arrived (the closest available proxy for "when the user started the
+# gesture") and the newest one (when the model had everything it used for
+# that inference).
+_emg_timestamps = deque(maxlen=qc.WIN_SAMPLES)
+
 
 def emit(event_type, payload=None):
     print(json.dumps({"type": event_type, "payload": payload if payload is not None else {}}), flush=True)
@@ -58,6 +67,7 @@ class BridgeClient(qc.myo.MyoClient):
         for sample in [emg.sample1, emg.sample2]:
             values = list(sample)
             qc.STATE.emg_buffer.append(values)
+            _emg_timestamps.append(time.time())
             emit("emg_data", {"channels": values})
             for i, v in enumerate(values):
                 _preview_sums[i] += v
@@ -237,6 +247,32 @@ class Bridge:
 
         emit("fine_tune_result", {"accuracy": accuracy, "sessionData": session_data_b64})
 
+    async def revert_calibration(self, payload):
+        """
+        Called after Node deletes a calibration row: reconciles the on-disk
+        checkpoint (and the in-memory model, if this user is currently
+        loaded) to whatever session_data it says is now the most recent
+        remaining one - or wipes the checkpoint back to the untouched base
+        model if none are left.
+        """
+        user_id = str(payload["userId"])
+        session_data_b64 = payload.get("sessionData")
+        checkpoint_path = os.path.join(CALIB_DIR, f"user_{user_id}.pt")
+
+        if session_data_b64:
+            with open(checkpoint_path, "wb") as f:
+                f.write(base64.b64decode(session_data_b64))
+        elif os.path.exists(checkpoint_path):
+            os.remove(checkpoint_path)
+
+        if self.loaded_user_id == user_id:
+            # Force _ensure_user_model_loaded to re-read from disk next time
+            # control starts, rather than keep serving the stale in-memory
+            # weights from the deleted session.
+            self.loaded_user_id = None
+
+        emit("revert_calibration_result", {"success": True})
+
     def _ensure_user_model_loaded(self, user_id):
         user_id = str(user_id)
         if self.loaded_user_id == user_id:
@@ -275,6 +311,12 @@ class Bridge:
             self.control_task.cancel()
             self.control_task = None
 
+        # Release the hand back to rest instead of leaving it clenched on
+        # whatever gesture was last commanded. set_gesture() is a no-op if
+        # it's already at rest, and it's synchronous/blocking, so run it off
+        # the event loop like the control loop does.
+        await asyncio.get_event_loop().run_in_executor(None, qc.HAND.set_gesture, "rest")
+
     async def _control_loop(self):
         pending_gesture = None
         pending_count = 0
@@ -287,7 +329,13 @@ class Bridge:
                 if len(qc.STATE.emg_buffer) < qc.WIN_SAMPLES:
                     continue
 
+                # Snapshot buffer + timestamps together so they stay aligned
+                # (both are appended together in on_emg_data, same maxlen).
                 window = np.array(qc.STATE.emg_buffer, dtype=np.float32)
+                window_timestamps = list(_emg_timestamps)
+                gesture_start_time = window_timestamps[0]  # oldest sample - closest proxy for "gesture began"
+                data_received_time = window_timestamps[-1]  # newest sample - just before inference ran
+
                 pred, conf = qc.predict(window)
                 name = qc.GESTURE_NAMES[pred]
 
@@ -311,6 +359,8 @@ class Bridge:
                     "predictionId": prediction_id,
                     "gesture": name,
                     "confidence": conf,
+                    "gestureStartTime": _iso(gesture_start_time),
+                    "dataReceivedTime": _iso(data_received_time),
                     "timestamp": _iso(prediction_time),
                 })
 
@@ -336,6 +386,7 @@ class Bridge:
             "myo_battery": self.myo_battery,
             "myo_poweroff": self.myo_poweroff,
             "fine_tune": self.fine_tune,
+            "revert_calibration": self.revert_calibration,
             "start_control": self.start_control,
             "stop_control": self.stop_control,
         }.get(command)

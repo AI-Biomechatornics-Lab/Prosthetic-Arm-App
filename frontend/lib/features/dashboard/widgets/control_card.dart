@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../shared/services/api_client.dart';
 import '../../../shared/widgets/section_card.dart';
 import '../../calibration/models/calibration_status.dart';
+import '../../calibration/widgets/calibration_history_dialog.dart';
 import '../../monitoring/providers/live_feed_provider.dart';
 import '../providers/myo_provider.dart';
 
@@ -29,16 +31,32 @@ class _ControlCardState extends ConsumerState<ControlCard> {
         if (mounted) context.go('/calibration');
         return;
       }
+
+      // Tell the Python bridge to actually start the real-time
+      // prediction/servo loop - opening the prediction/servo websockets
+      // alone doesn't trigger anything, it only listens for events that
+      // only exist once this has been called.
+      await ApiClient.instance.dio.post('/control/start', data: {'userId': widget.userId});
+
       final feed = ref.read(liveFeedControllerProvider(widget.userId).notifier);
       await feed.loadHistory();
       feed.start();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not start control: $e')));
+      }
     } finally {
       if (mounted) setState(() => _checking = false);
     }
   }
 
-  void _onStop() {
+  Future<void> _onStop() async {
     ref.read(liveFeedControllerProvider(widget.userId).notifier).stop();
+    try {
+      await ApiClient.instance.dio.post('/control/stop');
+    } catch (_) {
+      // best-effort; the UI has already detached its listeners
+    }
   }
 
   @override
@@ -48,29 +66,43 @@ class _ControlCardState extends ConsumerState<ControlCard> {
 
     return SectionCard(
       title: 'Control',
-      child: Row(
+      trailing: TextButton.icon(
+        onPressed: () => showCalibrationHistoryDialog(context, widget.userId),
+        icon: const Icon(Icons.history, size: 16),
+        label: const Text('History'),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (!active)
-            ElevatedButton.icon(
-              onPressed: (myoConnected && !_checking) ? _onStart : null,
-              icon: _checking
-                  ? const SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                    )
-                  : const Icon(Icons.play_arrow, size: 18),
-              label: const Text('Start'),
-            )
-          else
-            OutlinedButton.icon(
-              onPressed: _onStop,
-              icon: const Icon(Icons.stop, size: 18),
-              label: const Text('Stop'),
-            ),
-          const SizedBox(width: 16),
-          if (!myoConnected)
-            const Text('Connect the Myo armband to begin', style: TextStyle(fontSize: 12, color: Colors.grey)),
+          SizedBox(
+            width: double.infinity,
+            child: !active
+                ? ElevatedButton.icon(
+                    onPressed: (myoConnected && !_checking) ? _onStart : null,
+                    icon: _checking
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Icon(Icons.play_arrow, size: 18),
+                    label: const Text('Start'),
+                  )
+                : OutlinedButton.icon(
+                    onPressed: _onStop,
+                    icon: const Icon(Icons.stop, size: 18),
+                    label: const Text('Stop'),
+                  ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            active
+                ? 'Real-time control running'
+                : myoConnected
+                    ? 'Ready to start'
+                    : 'Connect the Myo armband to begin',
+            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+          ),
         ],
       ),
     );

@@ -52,21 +52,32 @@ class DashboardScreen extends ConsumerWidget {
               const SizedBox(height: 28),
               Expanded(
                 child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Expanded(flex: 2, child: MyoCard()),
-                          const SizedBox(width: 20),
-                          const Expanded(flex: 3, child: EmgGraphCard()),
-                        ],
+                      Expanded(
+                        flex: 3,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            const MyoCard(),
+                            const SizedBox(height: 20),
+                            ControlCard(userId: user.id),
+                          ],
+                        ),
                       ),
-                      const SizedBox(height: 20),
-                      ControlCard(userId: user.id),
-                      const SizedBox(height: 20),
-                      LiveFeedCard(userId: user.id),
+                      const SizedBox(width: 20),
+                      Expanded(
+                        flex: 7,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            const EmgGraphCard(),
+                            const SizedBox(height: 20),
+                            LiveFeedCard(userId: user.id),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
                 ),

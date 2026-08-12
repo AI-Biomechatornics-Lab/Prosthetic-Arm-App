@@ -4,10 +4,19 @@ import '../../../shared/services/socket_stream_service.dart';
 import '../models/log_entry.dart';
 
 class _PendingPrediction {
-  _PendingPrediction(this.gesture, this.confidence, this.timestamp);
+  _PendingPrediction({
+    required this.gesture,
+    required this.confidence,
+    required this.gestureStartTime,
+    required this.dataReceivedTime,
+    required this.predictionTime,
+  });
+
   final String gesture;
   final double confidence;
-  final DateTime timestamp;
+  final DateTime gestureStartTime;
+  final DateTime dataReceivedTime;
+  final DateTime predictionTime;
 }
 
 class LiveFeedState {
@@ -67,7 +76,13 @@ class LiveFeedController extends StateNotifier<LiveFeedState> {
       final id = p['predictionId'].toString();
       final gesture = p['gesture'] as String;
       final confidence = (p['confidence'] as num).toDouble();
-      _pending[id] = _PendingPrediction(gesture, confidence, DateTime.parse(p['timestamp'] as String));
+      _pending[id] = _PendingPrediction(
+        gesture: gesture,
+        confidence: confidence,
+        gestureStartTime: DateTime.parse(p['gestureStartTime'] as String),
+        dataReceivedTime: DateTime.parse(p['dataReceivedTime'] as String),
+        predictionTime: DateTime.parse(p['timestamp'] as String),
+      );
       state = state.copyWith(currentGesture: gesture, currentConfidence: confidence);
     });
 
@@ -81,11 +96,14 @@ class LiveFeedController extends StateNotifier<LiveFeedState> {
 
       final servoTime = DateTime.parse(p['timestamp'] as String);
       final entry = LogEntry(
-        timestamp: servoTime,
+        gestureStartTime: prediction.gestureStartTime,
+        dataReceivedTime: prediction.dataReceivedTime,
+        predictionTime: prediction.predictionTime,
+        servoTime: servoTime,
         prediction: prediction.gesture,
         confidence: prediction.confidence,
         servoCommand: p['command'] as String,
-        latencyMs: servoTime.difference(prediction.timestamp).inMicroseconds / 1000,
+        latencyMs: servoTime.difference(prediction.gestureStartTime).inMicroseconds / 1000,
       );
       state = state.copyWith(logs: [entry, ...state.logs]);
     });

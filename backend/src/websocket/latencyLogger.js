@@ -4,8 +4,13 @@ const logsService = require('../services/logs.service');
  * Correlates `prediction` and `servo_event` bridge messages (matched by
  * predictionId) and persists one log row per pair once both sides arrive.
  * Expects payloads shaped like:
- *   prediction:  { predictionId, userId, gesture, confidence, timestamp }
+ *   prediction:  { predictionId, userId, gesture, confidence, gestureStartTime, dataReceivedTime, timestamp }
  *   servo_event: { predictionId, userId, command, timestamp }
+ *
+ * latencyMs spans gestureStartTime -> servo timestamp: the full pipeline
+ * from the oldest EMG sample the model used for this prediction (the
+ * closest available proxy for "when the user began the gesture") through
+ * inference to the servo command being issued.
  */
 function attachLatencyLogger(bridge) {
   const pending = new Map();
@@ -19,6 +24,8 @@ function attachLatencyLogger(bridge) {
     if (!prediction) return;
     pending.delete(payload.predictionId);
 
+    const gestureStartTime = new Date(prediction.gestureStartTime);
+    const dataReceivedTime = new Date(prediction.dataReceivedTime);
     const predictionTime = new Date(prediction.timestamp);
     const servoTime = new Date(payload.timestamp);
 
@@ -27,9 +34,11 @@ function attachLatencyLogger(bridge) {
         prediction: prediction.gesture,
         confidence: prediction.confidence,
         servoCommand: payload.command,
+        gestureStartTime,
+        dataReceivedTime,
         predictionTime,
         servoTime,
-        latencyMs: servoTime - predictionTime,
+        latencyMs: servoTime - gestureStartTime,
       });
     } catch (err) {
       console.error('Failed to record log entry', err);

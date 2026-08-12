@@ -22,4 +22,22 @@ async function save(req, res, next) {
   }
 }
 
-module.exports = { getStatus, save };
+async function getHistory(req, res, next) {
+  try {
+    const history = await calibrationService.getHistory(req.params.userId);
+    res.json({ history });
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function deleteCalibration(req, res, next) {
+  try {
+    await calibrationService.deleteCalibration(req.params.userId, req.params.calibrationId);
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = { getStatus, save, getHistory, deleteCalibration };
