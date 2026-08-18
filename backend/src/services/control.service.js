@@ -1,7 +1,9 @@
 const bridge = require('./pythonBridge.service');
+const sessionTracker = require('./sessionTracker');
 
 async function start(userId) {
   bridge.start();
+  sessionTracker.startSession(userId);
   return bridge.request('start_control', { userId }, 15000);
 }
 

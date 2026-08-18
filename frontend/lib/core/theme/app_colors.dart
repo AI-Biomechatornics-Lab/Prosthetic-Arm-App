@@ -27,13 +27,16 @@ class AppColors {
   static const Color error = Color(0xFFDC2626);
   static const Color warning = Color(0xFFD97706);
 
-  // EMG channel palette (8 channels, blue-monochrome ramp for a clean scientific look)
+  // EMG channel palette (8 channels, blue-monochrome ramp for a clean
+  // scientific look). Tuned for legibility on a white chart background -
+  // the lightest shade in the original ramp (0xFF93C5FD) was nearly
+  // invisible there, so it's swapped for a darker navy instead.
   static const List<Color> emgChannels = [
     Color(0xFF1D4ED8),
     Color(0xFF2563EB),
     Color(0xFF3B82F6),
     Color(0xFF60A5FA),
-    Color(0xFF93C5FD),
+    Color(0xFF1E3A8A),
     Color(0xFF0EA5E9),
     Color(0xFF0284C7),
     Color(0xFF075985),

@@ -30,23 +30,50 @@ class LiveFeedCard extends ConsumerWidget {
           Container(
             padding: const EdgeInsets.symmetric(vertical: 28),
             decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(14)),
-            child: Column(
-              children: [
-                Text(
-                  feed.currentGesture?.replaceAll('_', ' ') ?? '—',
-                  style: Theme.of(context).textTheme.displayLarge?.copyWith(fontSize: 34),
-                ),
-                if (feed.currentConfidence != null) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    '${(feed.currentConfidence! * 100).toStringAsFixed(1)}% confidence',
-                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+            child: feed.isWarmingUp
+                ? const Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(strokeWidth: 2.5, color: AppColors.accent),
+                      ),
+                      SizedBox(height: 14),
+                      Text('Warming up…', style: TextStyle(color: AppColors.textSecondary, fontSize: 14)),
+                    ],
+                  )
+                : Column(
+                    children: [
+                      Text(
+                        feed.currentGesture?.replaceAll('_', ' ') ?? '—',
+                        style: Theme.of(context).textTheme.displayLarge?.copyWith(fontSize: 34),
+                      ),
+                      if (feed.currentConfidence != null) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          '${(feed.currentConfidence! * 100).toStringAsFixed(1)}% confidence',
+                          style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                        ),
+                      ],
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        height: 16,
+                        child: feed.detectingGesture != null
+                            ? Text(
+                                'detecting ${feed.detectingGesture!.replaceAll('_', ' ')}…',
+                                style: const TextStyle(
+                                  color: AppColors.textMuted,
+                                  fontSize: 11,
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              )
+                            : null,
+                      ),
+                      const SizedBox(height: 14),
+                      HandDiagram(gesture: feed.currentGesture),
+                    ],
                   ),
-                ],
-                const SizedBox(height: 24),
-                HandDiagram(gesture: feed.currentGesture),
-              ],
-            ),
           ),
           const SizedBox(height: 20),
           _LogTable(logs: feed.logs),
@@ -63,14 +90,16 @@ class _Col {
 }
 
 const _columns = [
-  _Col('Gesture Start', 100),
-  _Col('Data Received', 100),
-  _Col('Prediction', 100),
-  _Col('Servo Moved', 100),
-  _Col('Gesture', 110),
-  _Col('Confidence', 85),
-  _Col('Servo Command', 110),
-  _Col('Total Latency', 95),
+  _Col('Gesture Start', 95),
+  _Col('Data Received', 95),
+  _Col('Prediction', 95),
+  _Col('Servo Dispatched', 105),
+  _Col('Servo Moved', 95),
+  _Col('Gesture', 100),
+  _Col('Confidence', 80),
+  _Col('Servo Command', 100),
+  _Col('Decision Latency', 100),
+  _Col('Physical Latency', 100),
 ];
 
 class _LogTable extends StatelessWidget {
@@ -116,14 +145,19 @@ class _LogTable extends StatelessWidget {
                             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
                             child: Row(
                               children: [
-                                _Cell(_timeFormat.format(log.gestureStartTime), width: _columns[0].width),
-                                _Cell(_timeFormat.format(log.dataReceivedTime), width: _columns[1].width),
-                                _Cell(_timeFormat.format(log.predictionTime), width: _columns[2].width),
-                                _Cell(_timeFormat.format(log.servoTime), width: _columns[3].width),
-                                _Cell(log.prediction, width: _columns[4].width, bold: true),
-                                _Cell('${(log.confidence * 100).toStringAsFixed(1)}%', width: _columns[5].width),
-                                _Cell(log.servoCommand, width: _columns[6].width),
-                                _Cell('${log.latencyMs.toStringAsFixed(1)} ms', width: _columns[7].width),
+                                // Backend timestamps are UTC (correct for storage/transport) -
+                                // toLocal() converts to whatever timezone this browser is in
+                                // before display, otherwise the table shows UTC wall-clock time.
+                                _Cell(_timeFormat.format(log.gestureStartTime.toLocal()), width: _columns[0].width),
+                                _Cell(_timeFormat.format(log.dataReceivedTime.toLocal()), width: _columns[1].width),
+                                _Cell(_timeFormat.format(log.predictionTime.toLocal()), width: _columns[2].width),
+                                _Cell(_timeFormat.format(log.servoTime.toLocal()), width: _columns[3].width),
+                                _Cell(_timeFormat.format(log.servoMovedTime.toLocal()), width: _columns[4].width),
+                                _Cell(log.prediction, width: _columns[5].width, bold: true),
+                                _Cell('${(log.confidence * 100).toStringAsFixed(1)}%', width: _columns[6].width),
+                                _Cell(log.servoCommand, width: _columns[7].width),
+                                _Cell('${log.latencyMs.toStringAsFixed(1)} ms', width: _columns[8].width),
+                                _Cell('${log.physicalLatencyMs.toStringAsFixed(1)} ms', width: _columns[9].width),
                               ],
                             ),
                           );

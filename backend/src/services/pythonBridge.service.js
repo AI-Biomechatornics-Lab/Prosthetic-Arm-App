@@ -16,6 +16,16 @@ class PythonBridge extends EventEmitter {
     super();
     this.proc = null;
     this.ready = false;
+    // command name -> in-flight Promise. Without this, clicking (e.g.)
+    // Connect twice before the first scan finishes fires a second command
+    // with the same result-event name; the `once()` listener below can then
+    // resolve whichever call's promise the NEXT matching event happens to
+    // satisfy, not necessarily its own - one request can silently get
+    // another request's answer. Coalescing duplicate concurrent requests
+    // for the same command into a single shared promise removes that race
+    // entirely, and also stops us firing overlapping BLE scans that BlueZ
+    // itself rejects outright.
+    this._inFlight = new Map();
   }
 
   start() {
@@ -62,7 +72,10 @@ class PythonBridge extends EventEmitter {
 
   /** Sends a command and resolves with the first matching `${command}_result` event. */
   request(command, payload = {}, timeoutMs = 10000) {
-    return new Promise((resolve, reject) => {
+    const existing = this._inFlight.get(command);
+    if (existing) return existing;
+
+    const promise = new Promise((resolve, reject) => {
       const resultEvent = `${command}_result`;
       const timer = setTimeout(() => {
         this.off(resultEvent, onResult);
@@ -83,6 +96,10 @@ class PythonBridge extends EventEmitter {
         reject(err);
       }
     });
+
+    const tracked = promise.finally(() => this._inFlight.delete(command));
+    this._inFlight.set(command, tracked);
+    return tracked;
   }
 
   stop() {

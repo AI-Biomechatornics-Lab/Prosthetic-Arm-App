@@ -25,6 +25,7 @@ class EmgGraphCard extends ConsumerWidget {
       }
     });
 
+
     return SectionCard(
       title: 'Live EMG Signal',
       child: Column(
@@ -32,7 +33,8 @@ class EmgGraphCard extends ConsumerWidget {
           Container(
             height: 220,
             decoration: BoxDecoration(
-              color: const Color(0xFF0A0A0A),
+              color: AppColors.white,
+              border: Border.all(color: AppColors.border),
               borderRadius: BorderRadius.circular(14),
             ),
             padding: const EdgeInsets.all(8),
@@ -50,7 +52,7 @@ class EmgGraphCard extends ConsumerWidget {
                 children: [
                   Container(width: 12, height: 8, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2))),
                   const SizedBox(width: 6),
-                  Text('CH${i + 1}', style: const TextStyle(color: AppColors.white, fontSize: 12)),
+                  Text('CH${i + 1}', style: const TextStyle(color: AppColors.textPrimary, fontSize: 12)),
                 ],
               );
             }),

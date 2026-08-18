@@ -27,7 +27,18 @@ class MyoController extends StateNotifier<MyoState> {
   Future<void> connect() async {
     state = state.copyWith(status: MyoStatus.connecting, error: null);
     try {
-      await _dio.get('/myo/connect');
+      final res = await _dio.get('/myo/connect');
+      // Express responds 200 for a *handled* failure too (e.g. "Myo not
+      // found") - the bridge's own success flag is what actually says
+      // whether it connected, an HTTP 200 alone doesn't mean that.
+      final data = res.data as Map<String, dynamic>;
+      if (data['success'] != true) {
+        state = state.copyWith(
+          status: MyoStatus.lost,
+          error: data['error'] as String? ?? 'Failed to connect',
+        );
+        return;
+      }
       state = state.copyWith(status: MyoStatus.connected);
       await refreshBattery();
     } catch (e) {

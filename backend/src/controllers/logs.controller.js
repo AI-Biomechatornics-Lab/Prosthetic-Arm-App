@@ -11,11 +11,20 @@ async function getLogs(req, res, next) {
   }
 }
 
+async function getLatestSession(req, res, next) {
+  try {
+    const logs = await logsService.getLatestSessionLogs(req.params.userId);
+    res.json({ logs });
+  } catch (err) {
+    next(err);
+  }
+}
+
 async function exportPdf(req, res, next) {
   try {
     const [user, logs] = await Promise.all([
       usersService.findById(req.params.userId),
-      logsService.getLogs(req.params.userId),
+      logsService.getLatestSessionLogs(req.params.userId),
     ]);
     if (!user) return res.status(404).json({ error: 'User not found' });
 
@@ -27,4 +36,4 @@ async function exportPdf(req, res, next) {
   }
 }
 
-module.exports = { getLogs, exportPdf };
+module.exports = { getLogs, getLatestSession, exportPdf };
