@@ -91,7 +91,7 @@ CONFIDENCE_THRESHOLD = 0.65
 # same low-confidence band is also where most false positives land - so they
 # get their own, higher bar instead of raising the threshold globally.
 WRIST_GESTURES = {"wrist_rotate_out", "wrist_rotate_in"}
-WRIST_CONFIDENCE_THRESHOLD = 0.75
+WRIST_CONFIDENCE_THRESHOLD = 0.85
 # Bounds the BLE scan in myo_connect - see the comment there.
 SCAN_TIMEOUT_SECONDS = 25
 # Mechanically, closing to a fist is a transient midpoint while the hand
@@ -108,7 +108,7 @@ FIST_BLACKLIST_SECONDS = 4.0
 FIST_TO_SINGLE_FINGER_BLACKLIST_SECONDS = 1.5
 # Ignore predictions entirely for this long after Start - the model tends to
 # fire a false wrist_rotate_out immediately, before the user's done anything.
-WARMUP_SECONDS = 3
+WARMUP_SECONDS = 5
 
 
 def _required_confidence(gesture_name):
@@ -117,15 +117,12 @@ def _required_confidence(gesture_name):
 
 def _rest_hand_fast():
     """
-    HandController.set_gesture("rest") opens each finger one at a time
-    (fast_open + recover_open per finger, sequentially) - measured ~7.6s
-    end to end. Its own open_all() moves all 5 servos simultaneously in
-    ~1s, but only set_gesture() updates current_gesture/busy bookkeeping.
-    hand_controller.py can't be edited, but open_all() and those attributes
-    are already public - calling it directly and replicating the small bit
-    of bookkeeping set_gesture() would otherwise have done is not a
-    modification to that file, just a different (already-supported) way of
-    driving it.
+    Calls HandController.open_all() directly instead of
+    set_gesture("rest") - open_all() moves the non-pinky fingers
+    simultaneously and skips any already at OPEN_POSITION (force=False,
+    the default), while set_gesture()'s dispatch overhead and busy/gesture
+    bookkeeping aren't needed here; this replicates just the bit of that
+    bookkeeping (current_gesture) that matters for the rest of the bridge.
     """
     if getattr(qc.HAND, "current_gesture", None) == "rest":
         return
